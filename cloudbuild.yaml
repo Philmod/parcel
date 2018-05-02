@@ -1,4 +1,35 @@
 steps:
-- name: 'ubuntu'
-  args: ['echo', 'hello mod']
+# Import builder if exists.
+# Note: the reason to use bash is to be able to return an exit code 0 even if
+# the docker image doesn't exist yet.
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    docker pull gcr.io/$PROJECT_ID/yarn_with_rust || exit 0
 
+# Build a modified version of the yarn builder, adding rust to the image.
+# Use the previous built image as cache.
+# TODO: add the node version.
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - build
+  - -t
+  - gcr.io/$PROJECT_ID/yarn_with_rust
+  - --cache-from
+  - gcr.io/$PROJECT_ID/yarn_with_rust
+  - -f
+  - cloud_builders/yarn_with_rust/Dockerfile
+  - cloud_builders/yarn_with_rust/.
+
+# - name: 'gcr.io/cloud-builders/yarn:$_NODE_VERSION'
+- name: 'gcr.io/$PROJECT_ID/yarn_with_rust'
+  args: ['install']
+
+- name: 'gcr.io/$PROJECT_ID/yarn_with_rust'
+  args: ['run', 'test-ci']
+
+# Push the yarn builder (with rust) to registry,
+# so it's cached for next build unless it's modified.
+images: ['gcr.io/$PROJECT_ID/yarn_with_rust']
