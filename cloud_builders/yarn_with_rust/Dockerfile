@@ -1,4 +1,5 @@
-FROM gcr.io/cloud-builders/yarn:node-8.11.0
+ARG NODE_VERSION=8.11.0
+FROM gcr.io/cloud-builders/yarn:node-${NODE_VERSION}
 
 ENV CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \

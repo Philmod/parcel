@@ -109,7 +109,8 @@
     "precommit": "npm run lint && lint-staged",
     "lint": "eslint .",
     "postinstall":
-      "node -e \"console.log('\\u001b[35m\\u001b[1mLove Parcel? You can now donate to our open collective:\\u001b[22m\\u001b[39m\\n > \\u001b[34mhttps://opencollective.com/parcel/donate\\u001b[0m')\""
+      "node -e \"console.log('\\u001b[35m\\u001b[1mLove Parcel? You can now donate to our open collective:\\u001b[22m\\u001b[39m\\n > \\u001b[34mhttps://opencollective.com/parcel/donate\\u001b[0m')\"",
+    "gcb": "gcloud container builds submit --config=cloudbuild.yaml ."
   },
   "bin": {
     "parcel": "bin/cli.js"
