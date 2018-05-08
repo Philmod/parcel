@@ -12,6 +12,7 @@ steps:
 # Build a modified version of the yarn builder, adding rust to the image.
 # Use the previous built image as cache.
 - name: 'gcr.io/cloud-builders/docker'
+  dir: 'cloud_builders/yarn_with_rust'
   args:
   - build
   - --build-arg=NODE_VERSION=${_NODE_VERSION}
@@ -19,9 +20,7 @@ steps:
   - gcr.io/$PROJECT_ID/yarn_with_rust:node-${_NODE_VERSION}
   - --cache-from
   - gcr.io/$PROJECT_ID/yarn_with_rust:node-${_NODE_VERSION}
-  - -f
-  - cloud_builders/yarn_with_rust/Dockerfile
-  - cloud_builders/yarn_with_rust/.
+  - .
 
 # Install dependencies.
 - name: 'gcr.io/$PROJECT_ID/yarn_with_rust'
