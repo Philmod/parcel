@@ -36,5 +36,3 @@ images: ['gcr.io/$PROJECT_ID/yarn_with_rust:node-${_NODE_VERSION}']
 
 substitutions:
   _NODE_VERSION: 8.11.0
-
-timeout: 600s
