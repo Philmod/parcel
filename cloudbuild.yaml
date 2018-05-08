@@ -23,10 +23,11 @@ steps:
   - cloud_builders/yarn_with_rust/Dockerfile
   - cloud_builders/yarn_with_rust/.
 
-# - name: 'gcr.io/cloud-builders/yarn:$_NODE_VERSION'
+# Install dependencies.
 - name: 'gcr.io/$PROJECT_ID/yarn_with_rust'
   args: ['install']
 
+# Test.
 - name: 'gcr.io/$PROJECT_ID/yarn_with_rust'
   args: ['run', 'test-ci']
 
