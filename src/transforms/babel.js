@@ -3,6 +3,7 @@ const getTargetEngines = require('../utils/getTargetEngines');
 const localRequire = require('../utils/localRequire');
 const path = require('path');
 const {util: babelUtils} = require('babel-core');
+const fs = require('../utils/fs');
 
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
 const ENV_PLUGINS = require('babel-preset-env/data/plugins');
@@ -89,9 +90,19 @@ async function getBabelConfig(asset) {
     return asset.babelConfig;
   }
 
-  let babelrc = await getBabelRc(asset);
-  let envConfig = await getEnvConfig(asset, !!babelrc);
-  let jsxConfig = getJSXConfig(asset, !!babelrc);
+  // Consider the module source code rather than precompiled if the resolver
+  // used the `source` field, or it is not in node_modules.
+  let pkg = await asset.getPackage();
+  let isSource =
+    !!(pkg && pkg.source && (await fs.realpath(asset.name)) !== asset.name) ||
+    !asset.name.includes(NODE_MODULES);
+
+  // Try to resolve a .babelrc file. If one is found, consider the module source code.
+  let babelrc = await getBabelRc(asset, isSource);
+  isSource = isSource || !!babelrc;
+
+  let envConfig = await getEnvConfig(asset, isSource);
+  let jsxConfig = await getJSXConfig(asset, isSource);
 
   // Merge the babel-preset-env config and the babelrc if needed
   if (babelrc && !shouldIgnoreBabelrc(asset.name, babelrc)) {
@@ -162,10 +173,12 @@ function getPluginName(p) {
  * Finds a .babelrc for an asset. By default, .babelrc files inside node_modules are not used.
  * However, there are some exceptions:
  *   - if `browserify.transforms` includes "babelify" in package.json (for legacy module compat)
+ *   - the `source` field in package.json is used by the resolver
  */
-async function getBabelRc(asset) {
+async function getBabelRc(asset, isSource) {
   // Support legacy browserify packages
-  let browserify = asset.package && asset.package.browserify;
+  let pkg = await asset.getPackage();
+  let browserify = pkg && pkg.browserify;
   if (browserify && Array.isArray(browserify.transform)) {
     // Look for babelify in the browserify transform list
     let babelify = browserify.transform.find(
@@ -182,7 +195,7 @@ async function getBabelRc(asset) {
   }
 
   // If this asset is not in node_modules, always use the .babelrc
-  if (!asset.name.includes(NODE_MODULES)) {
+  if (isSource) {
     return await findBabelRc(asset);
   }
 
@@ -192,11 +205,9 @@ async function getBabelRc(asset) {
 }
 
 async function findBabelRc(asset) {
-  if (asset.package && asset.package.babel) {
-    return asset.package.babel;
-  }
-
-  return await asset.getConfig(['.babelrc', '.babelrc.js']);
+  return await asset.getConfig(['.babelrc', '.babelrc.js'], {
+    packageKey: 'babel'
+  });
 }
 
 function shouldIgnoreBabelrc(filename, babelrc) {
@@ -224,7 +235,7 @@ async function getEnvConfig(asset, isSourceModule) {
 
   // If this is the app module, the source and target will be the same, so just compile everything.
   // Otherwise, load the source engines and generate a babel-present-env config.
-  if (asset.name.includes(NODE_MODULES) && !isSourceModule) {
+  if (!isSourceModule) {
     let sourceEngines = await getTargetEngines(asset, false);
     let sourceEnv = (await getEnvPlugins(sourceEngines, false)) || targetEnv;
 
@@ -262,16 +273,17 @@ async function getEnvPlugins(targets, useBuiltIns = false) {
  * Generates a babel config for JSX. Attempts to detect react or react-like libraries
  * and changes the pragma accordingly.
  */
-function getJSXConfig(asset, isSourceModule) {
+async function getJSXConfig(asset, isSourceModule) {
   // Don't enable JSX in node_modules
-  if (asset.name.includes(NODE_MODULES) && !isSourceModule) {
+  if (!isSourceModule) {
     return null;
   }
+
+  let pkg = await asset.getPackage();
 
   // Find a dependency that we can map to a JSX pragma
   let pragma = null;
   for (let dep in JSX_PRAGMA) {
-    let pkg = asset.package;
     if (
       pkg &&
       ((pkg.dependencies && pkg.dependencies[dep]) ||

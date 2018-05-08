@@ -10,12 +10,14 @@ const json5 = require('json5');
 const sinon = require('sinon');
 
 describe('hmr', function() {
-  let b, ws;
+  let b, ws, stub;
   beforeEach(function() {
+    stub = sinon.stub(console, 'clear');
     rimraf.sync(__dirname + '/input');
   });
 
   afterEach(function(done) {
+    stub.restore();
     let finalise = () => {
       if (b) {
         b.stop();
@@ -313,7 +315,8 @@ describe('hmr', function() {
         console: {
           error(msg) {
             logs.push(msg);
-          }
+          },
+          clear() {}
         }
       },
       {require: false}
@@ -349,7 +352,8 @@ describe('hmr', function() {
           },
           log(msg) {
             logs.push(msg);
-          }
+          },
+          clear() {}
         }
       },
       {require: false}

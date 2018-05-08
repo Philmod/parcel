@@ -7,20 +7,22 @@ const Asset = require('../Asset');
 const babylon = require('babylon');
 const insertGlobals = require('../visitors/globals');
 const fsVisitor = require('../visitors/fs');
+const envVisitor = require('../visitors/env');
 const babel = require('../transforms/babel');
 const generate = require('babel-generator').default;
 const uglify = require('../transforms/uglify');
 const SourceMap = require('../SourceMap');
 
 const IMPORT_RE = /\b(?:import\b|export\b|require\s*\()/;
-const GLOBAL_RE = /\b(?:process|__dirname|__filename|global|Buffer)\b/;
+const ENV_RE = /\b(?:process\.env)\b/;
+const GLOBAL_RE = /\b(?:process|__dirname|__filename|global|Buffer|define)\b/;
 const FS_RE = /\breadFileSync\b/;
 const SW_RE = /\bnavigator\s*\.\s*serviceWorker\s*\.\s*register\s*\(/;
 const WORKER_RE = /\bnew\s*Worker\s*\(/;
 
 class JSAsset extends Asset {
-  constructor(name, pkg, options) {
-    super(name, pkg, options);
+  constructor(name, options) {
+    super(name, options);
     this.type = 'js';
     this.globals = new Map();
     this.isAstDirty = false;
@@ -93,13 +95,26 @@ class JSAsset extends Asset {
 
   async pretransform() {
     await babel(this);
+
+    // Inline environment variables
+    if (ENV_RE.test(this.contents)) {
+      await this.parseIfNeeded();
+      this.traverseFast(envVisitor);
+    }
   }
 
   async transform() {
     if (this.options.target === 'browser') {
       if (this.dependencies.has('fs') && FS_RE.test(this.contents)) {
-        await this.parseIfNeeded();
-        this.traverse(fsVisitor);
+        // Check if we should ignore fs calls
+        // See https://github.com/defunctzombie/node-browser-resolve#skip
+        let pkg = await this.getPackage();
+        let ignore = pkg && pkg.browser && pkg.browser.fs === false;
+
+        if (!ignore) {
+          await this.parseIfNeeded();
+          this.traverse(fsVisitor);
+        }
       }
 
       if (GLOBAL_RE.test(this.contents)) {

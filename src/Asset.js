@@ -5,6 +5,8 @@ const objectHash = require('./utils/objectHash');
 const md5 = require('./utils/md5');
 const isURL = require('./utils/is-url');
 const config = require('./utils/config');
+const syncPromise = require('./utils/syncPromise');
+const logger = require('./Logger');
 
 let ASSET_ID = 1;
 
@@ -15,12 +17,11 @@ let ASSET_ID = 1;
  * for subclasses to implement.
  */
 class Asset {
-  constructor(name, pkg, options) {
+  constructor(name, options) {
     this.id = ASSET_ID++;
     this.name = name;
     this.basename = path.basename(this.name);
     this.relativeName = path.relative(options.rootDir, this.name);
-    this.package = pkg || {};
     this.options = options;
     this.encoding = 'utf8';
     this.type = path.extname(this.name).slice(1);
@@ -88,20 +89,45 @@ class Asset {
     }
 
     const parsed = URL.parse(url);
-    const resolved = path.resolve(path.dirname(from), parsed.pathname);
+    const resolved = path.resolve(
+      path.dirname(from),
+      decodeURIComponent(parsed.pathname)
+    );
     this.addDependency(
       './' + path.relative(path.dirname(this.name), resolved),
       Object.assign({dynamic: true}, opts)
     );
 
     parsed.pathname = this.options.parser
-      .getAsset(resolved, this.package, this.options)
+      .getAsset(resolved, this.options)
       .generateBundleName();
 
     return URL.format(parsed);
   }
 
+  get package() {
+    logger.warn(
+      '`asset.package` is deprecated. Please use `await asset.getPackage()` instead.'
+    );
+    return syncPromise(this.getPackage());
+  }
+
+  async getPackage() {
+    if (!this._package) {
+      this._package = await this.getConfig(['package.json']);
+    }
+
+    return this._package;
+  }
+
   async getConfig(filenames, opts = {}) {
+    if (opts.packageKey) {
+      let pkg = await this.getPackage();
+      if (pkg && pkg[opts.packageKey]) {
+        return pkg[opts.packageKey];
+      }
+    }
+
     // Resolve the config file
     let conf = await config.resolve(opts.path || this.name, filenames);
     if (conf) {

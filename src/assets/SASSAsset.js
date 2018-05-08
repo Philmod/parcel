@@ -3,10 +3,12 @@ const localRequire = require('../utils/localRequire');
 const promisify = require('../utils/promisify');
 const path = require('path');
 const os = require('os');
+const Resolver = require('../Resolver');
+const syncPromise = require('../utils/syncPromise');
 
 class SASSAsset extends Asset {
-  constructor(name, pkg, options) {
-    super(name, pkg, options);
+  constructor(name, options) {
+    super(name, options);
     this.type = 'css';
   }
 
@@ -14,10 +16,13 @@ class SASSAsset extends Asset {
     // node-sass should be installed locally in the module that's being required
     let sass = await localRequire('node-sass', this.name);
     let render = promisify(sass.render.bind(sass));
+    const resolver = new Resolver({
+      extensions: ['.scss', '.sass'],
+      rootDir: this.options.rootDir
+    });
 
     let opts =
-      this.package.sass ||
-      (await this.getConfig(['.sassrc', '.sassrc.js'])) ||
+      (await this.getConfig(['.sassrc', '.sassrc.js'], {packageKey: 'sass'})) ||
       {};
     opts.includePaths = (opts.includePaths || []).concat(
       path.dirname(this.name)
@@ -35,6 +40,20 @@ class SASSAsset extends Asset {
       }
     });
 
+    opts.importer = (url, prev, done) => {
+      let resolved;
+      try {
+        resolved = syncPromise(
+          resolver.resolve(url, prev === 'stdin' ? this.name : prev)
+        ).path;
+      } catch (e) {
+        resolved = url;
+      }
+      return done({
+        file: resolved
+      });
+    };
+
     return await render(opts);
   }
 
@@ -48,7 +67,7 @@ class SASSAsset extends Asset {
     return [
       {
         type: 'css',
-        value: this.ast.css.toString(),
+        value: this.ast ? this.ast.css.toString() : '',
         hasDependencies: false
       }
     ];
